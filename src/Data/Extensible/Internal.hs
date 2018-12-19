@@ -42,7 +42,6 @@ module Data.Extensible.Internal (
   , FindAssoc
   -- * Sugar
   , Elaborate
-  , Elaborated(..)
   -- * Miscellaneous
   , Head
   , Last
@@ -92,7 +91,7 @@ remember i r = unsafeCoerce (Remembrance r :: Remembrance xs x r) i
 class Member xs x where
   membership :: Membership xs x
 
-instance (Elaborate x (FindType x xs) ~ 'Expecting pos, KnownNat pos) => Member xs x where
+instance (Elaborate x xs (FindType x xs) ~ pos, KnownNat pos) => Member xs x where
   membership = Membership (fromInteger $ natVal (Proxy :: Proxy pos))
   {-# INLINE membership #-}
 
@@ -115,17 +114,15 @@ type (>:) = '(:>)
 class Associate k v xs | k xs -> v where
   association :: Membership xs (k ':> v)
 
-instance (Elaborate k (FindAssoc 0 k xs) ~ 'Expecting (n ':> v), KnownNat n) => Associate k v xs where
+instance (Elaborate k xs (FindAssoc 0 k xs) ~ (n ':> v), KnownNat n) => Associate k v xs where
   association = Membership (fromInteger $ natVal (Proxy :: Proxy n))
 
--- | A readable type search result
-data Elaborated k v = Expecting v | Missing k | Duplicate k
-
 -- | Make the result more readable
-type family Elaborate (key :: k) (xs :: [v]) :: Elaborated k v where
-  Elaborate k '[] = 'Missing k
-  Elaborate k '[x] = 'Expecting x
-  Elaborate k xs = 'Duplicate k
+type family Elaborate (key :: k) (candidates :: [k']) (xs :: [v]) :: v where
+  Elaborate k cs '[] = TypeError ('ShowType k ':<>: 'Text " is not found in " ':<>: 'ShowType cs)
+  Elaborate k cs '[x] = x
+  Elaborate k cs xs = TypeError ('ShowType k ':<>: 'Text " is duplicate in " ':<>: 'ShowType cs)
+
 
 -- | Find a type associated to the specified key.
 type family FindAssoc (n :: Nat) (key :: k) (xs :: [Assoc k v]) where
